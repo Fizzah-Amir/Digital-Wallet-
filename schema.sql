@@ -1,7 +1,8 @@
-DROP SCHEMA public CASCADE;
+ DROP SCHEMA public CASCADE;
 CREATE SCHEMA public;
 GRANT ALL ON SCHEMA public TO postgres;
 GRANT ALL ON SCHEMA public TO public;
+
 CREATE TABLE IF NOT EXISTS person (
     person_id    SERIAL PRIMARY KEY,
     email        VARCHAR(100) UNIQUE NOT NULL CHECK (email LIKE '%@%.%'),
@@ -30,7 +31,7 @@ CREATE TABLE IF NOT EXISTS wallet (
     wallet_id      SERIAL PRIMARY KEY,
     current_amount DECIMAL(10,2) NOT NULL CHECK (current_amount >= 0),
     wallet_account CHAR(16) UNIQUE NOT NULL,
-    person_id      INT NOT NULL REFERENCES person(person_id)
+    person_id      INT NOT NULL UNIQUE REFERENCES person(person_id)
 );
 
 CREATE TABLE IF NOT EXISTS "transaction" (
@@ -43,15 +44,16 @@ CREATE TABLE IF NOT EXISTS "transaction" (
     timestamp_receiver TIMESTAMP NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS transaction_notification (
-    notification_id SERIAL PRIMARY KEY,
-    transaction_id  INT UNIQUE NOT NULL REFERENCES "transaction"(transaction_id)
-);
-
 CREATE TABLE IF NOT EXISTS notification (
     notification_id        SERIAL PRIMARY KEY,
     receiver_id            INT NOT NULL REFERENCES person(person_id),
     notification_timestamp TIMESTAMP NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS transaction_notification (
+    transaction_id  INT NOT NULL REFERENCES "transaction"(transaction_id),
+    notification_id INT NOT NULL REFERENCES notification(notification_id),
+    PRIMARY KEY (transaction_id, notification_id)
 );
 
 CREATE TABLE IF NOT EXISTS bill_payment (
@@ -118,8 +120,10 @@ CREATE TABLE IF NOT EXISTS mobile_recharge (
     amount             DECIMAL(10,2) NOT NULL CHECK (amount > 0),
     recharge_timestamp TIMESTAMP NOT NULL
 );
+
 CREATE INDEX idx_wallet_person ON wallet(person_id);
-CREATE INDEX idx_transaction_sender_receiver ON transaction(sender_wallet_id, receiver_wallet_id);
+CREATE INDEX idx_transaction_sender_receiver ON "transaction"(sender_wallet_id, receiver_wallet_id);
+
 CREATE OR REPLACE FUNCTION check_rank_transaction_limit()
 RETURNS TRIGGER AS $$
 DECLARE
@@ -155,6 +159,7 @@ CREATE TRIGGER trg_check_rank_limit
 BEFORE INSERT ON "transaction"
 FOR EACH ROW EXECUTE FUNCTION check_rank_transaction_limit();
 
+
 CREATE OR REPLACE FUNCTION update_wallet_balance()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -176,21 +181,27 @@ DROP TRIGGER IF EXISTS trg_update_wallet_balance ON "transaction";
 CREATE TRIGGER trg_update_wallet_balance
 AFTER INSERT ON "transaction"
 FOR EACH ROW EXECUTE FUNCTION update_wallet_balance();
+
+
 CREATE OR REPLACE FUNCTION create_transaction_notifications()
 RETURNS TRIGGER AS $$
+DECLARE
+    v_sender_notification_id   INT;
+    v_receiver_notification_id INT;
 BEGIN
-    INSERT INTO transaction_notification(transaction_id)
-    VALUES (NEW.transaction_id);
+    INSERT INTO notification(receiver_id, notification_timestamp)
+    VALUES ((SELECT person_id FROM wallet WHERE wallet_id = NEW.sender_wallet_id), NOW())
+    RETURNING notification_id INTO v_sender_notification_id;
 
-    INSERT INTO notification(transaction_id, receiver_id, notification_timestamp)
-    VALUES (NEW.transaction_id,
-            (SELECT person_id FROM wallet WHERE wallet_id = NEW.sender_wallet_id),
-            NOW());
+    INSERT INTO notification(receiver_id, notification_timestamp)
+    VALUES ((SELECT person_id FROM wallet WHERE wallet_id = NEW.receiver_wallet_id), NOW())
+    RETURNING notification_id INTO v_receiver_notification_id;
 
-    INSERT INTO notification(transaction_id, receiver_id, notification_timestamp)
-    VALUES (NEW.transaction_id,
-            (SELECT person_id FROM wallet WHERE wallet_id = NEW.receiver_wallet_id),
-            NOW());
+    INSERT INTO transaction_notification(transaction_id, notification_id)
+    VALUES (NEW.transaction_id, v_sender_notification_id);
+
+    INSERT INTO transaction_notification(transaction_id, notification_id)
+    VALUES (NEW.transaction_id, v_receiver_notification_id);
 
     RETURN NEW;
 END;
@@ -200,6 +211,8 @@ DROP TRIGGER IF EXISTS trg_create_notifications ON "transaction";
 CREATE TRIGGER trg_create_notifications
 AFTER INSERT ON "transaction"
 FOR EACH ROW EXECUTE FUNCTION create_transaction_notifications();
+
+
 CREATE OR REPLACE FUNCTION deduct_wallet_on_bill_payment()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -218,6 +231,8 @@ DROP TRIGGER IF EXISTS trg_deduct_bill_payment ON bill_payment;
 CREATE TRIGGER trg_deduct_bill_payment
 AFTER INSERT ON bill_payment
 FOR EACH ROW EXECUTE FUNCTION deduct_wallet_on_bill_payment();
+
+
 CREATE OR REPLACE FUNCTION deduct_wallet_on_recharge()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -236,6 +251,7 @@ DROP TRIGGER IF EXISTS trg_deduct_mobile_recharge ON mobile_recharge;
 CREATE TRIGGER trg_deduct_mobile_recharge
 AFTER INSERT ON mobile_recharge
 FOR EACH ROW EXECUTE FUNCTION deduct_wallet_on_recharge();
+
 
 CREATE OR REPLACE FUNCTION update_transaction_count()
 RETURNS TRIGGER AS $$
@@ -297,19 +313,17 @@ DECLARE
     v_merchant_wallet_id INT;
     v_admin_wallet_id    INT;
 BEGIN
-  
     SELECT wallet_id INTO v_merchant_wallet_id
-    FROM wallet
-    WHERE person_id = NEW.merchant_person_id;
+    FROM wallet WHERE person_id = NEW.merchant_person_id;
 
     SELECT wallet_id INTO v_admin_wallet_id
-    FROM wallet
-    WHERE person_id = NEW.admin_person_id;
+    FROM wallet WHERE person_id = NEW.admin_person_id;
 
     IF (SELECT current_amount FROM wallet WHERE wallet_id = v_merchant_wallet_id) < NEW.promotion_cost THEN
         RAISE EXCEPTION 'Merchant has insufficient balance to pay for promotion of Rs %',
             NEW.promotion_cost;
     END IF;
+
     UPDATE wallet SET current_amount = current_amount - NEW.promotion_cost
     WHERE wallet_id = v_merchant_wallet_id;
 
@@ -329,12 +343,7 @@ BEGIN
         AND   admin_person_id = NEW.admin_person_id;
     ELSE
         INSERT INTO revenue (month, year, amount, admin_person_id)
-        VALUES (
-            EXTRACT(MONTH FROM NOW()),
-            EXTRACT(YEAR  FROM NOW()),
-            NEW.promotion_cost,
-            NEW.admin_person_id
-        );
+        VALUES (EXTRACT(MONTH FROM NOW()), EXTRACT(YEAR FROM NOW()), NEW.promotion_cost, NEW.admin_person_id);
     END IF;
 
     RETURN NEW;
@@ -345,6 +354,7 @@ DROP TRIGGER IF EXISTS trg_add_promotion_revenue ON promotion;
 CREATE TRIGGER trg_add_promotion_revenue
 AFTER INSERT ON promotion
 FOR EACH ROW EXECUTE FUNCTION add_promotion_revenue();
+
 
 CREATE OR REPLACE FUNCTION check_debit_card_expiry()
 RETURNS TRIGGER AS $$
@@ -371,6 +381,7 @@ CREATE TRIGGER trg_check_debit_card_expiry
 BEFORE INSERT ON "transaction"
 FOR EACH ROW EXECUTE FUNCTION check_debit_card_expiry();
 
+
 CREATE OR REPLACE FUNCTION check_self_transfer()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -386,6 +397,8 @@ DROP TRIGGER IF EXISTS trg_check_self_transfer ON "transaction";
 CREATE TRIGGER trg_check_self_transfer
 BEFORE INSERT ON "transaction"
 FOR EACH ROW EXECUTE FUNCTION check_self_transfer();
+
+
 CREATE OR REPLACE FUNCTION charge_debit_card_fee()
 RETURNS TRIGGER AS $$
 DECLARE
@@ -393,10 +406,8 @@ DECLARE
     v_admin_wallet_id INT;
     v_admin_person_id INT;
 BEGIN
-    
     SELECT wallet_id INTO v_user_wallet_id
-    FROM wallet
-    WHERE person_id = NEW.person_user_id;
+    FROM wallet WHERE person_id = NEW.person_user_id;
 
     IF (SELECT current_amount FROM wallet WHERE wallet_id = v_user_wallet_id) < NEW.card_fee THEN
         RAISE EXCEPTION 'Insufficient balance to pay debit card registration fee of Rs %',
@@ -404,20 +415,17 @@ BEGIN
     END IF;
 
     SELECT admin_person_id INTO v_admin_person_id
-    FROM admin
-    LIMIT 1;
+    FROM admin LIMIT 1;
 
     SELECT wallet_id INTO v_admin_wallet_id
-    FROM wallet
-    WHERE person_id = v_admin_person_id;
+    FROM wallet WHERE person_id = v_admin_person_id;
 
-   
     UPDATE wallet SET current_amount = current_amount - NEW.card_fee
     WHERE wallet_id = v_user_wallet_id;
 
-    
     UPDATE wallet SET current_amount = current_amount + NEW.card_fee
     WHERE wallet_id = v_admin_wallet_id;
+
     IF EXISTS (
         SELECT 1 FROM revenue
         WHERE month           = EXTRACT(MONTH FROM NOW())
@@ -431,12 +439,7 @@ BEGIN
         AND   admin_person_id = v_admin_person_id;
     ELSE
         INSERT INTO revenue (month, year, amount, admin_person_id)
-        VALUES (
-            EXTRACT(MONTH FROM NOW()),
-            EXTRACT(YEAR  FROM NOW()),
-            NEW.card_fee,
-            v_admin_person_id
-        );
+        VALUES (EXTRACT(MONTH FROM NOW()), EXTRACT(YEAR FROM NOW()), NEW.card_fee, v_admin_person_id);
     END IF;
 
     RETURN NEW;

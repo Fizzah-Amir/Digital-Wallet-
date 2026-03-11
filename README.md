@@ -94,8 +94,8 @@ Create a `.env` file inside the `backend/` folder:
 
 ```
 DB_NAME=digital_wallet
-DB_USER=postgres
-DB_PASSWORD=zoha1234
+DB_USER=your_db_user
+DB_PASSWORD=your_db_password
 DB_HOST=localhost
 DB_PORT=5432
 ```
@@ -251,7 +251,7 @@ sudo systemctl restart postgresql
 #### Step 5 - Set PostgreSQL password
 
 ```bash
-sudo -u postgres psql -c "ALTER USER postgres PASSWORD 'zoha1234';"
+sudo -u postgres psql -c "ALTER USER postgres PASSWORD 'your_db_password';"
 ```
 
 #### Step 6 - Create database

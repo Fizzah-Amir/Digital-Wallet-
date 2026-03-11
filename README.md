@@ -305,12 +305,13 @@ Update:
 ```python
 ALLOWED_HOSTS = ['<new-ec2-ip>', 'localhost', '127.0.0.1']
 
+
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
         'NAME': 'digital_wallet',
-        'USER': 'postgres',
-        'PASSWORD': 'zoha1234',
+        'USER': 'your_db_user',
+        'PASSWORD': 'your_db_password',
         'HOST': 'localhost',
         'PORT': '5432',
         'CONN_MAX_AGE': 60,

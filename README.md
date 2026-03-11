@@ -70,7 +70,7 @@ backend/
 ### 1. Clone and navigate to project
 
 ```bash
-git clone <repository_url>
+git clone <https://github.com/Fizzah-Amir/Digital-Wallet->
 cd backend
 ```
 

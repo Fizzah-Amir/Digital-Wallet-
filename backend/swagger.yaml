@@ -1,0 +1,737 @@
+openapi: 3.0.0
+info:
+  title: Digital Wallet API
+  version: v1
+  description: A complete digital wallet banking system API
+
+servers:
+  - url: http://127.0.0.1:8000/api/v1
+    description: Development server
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    RegisterRequest:
+      type: object
+      required: [name, email, phone_number, password, cnic, person_type]
+      properties:
+        name:
+          type: string
+          example: Ali Hassan
+        email:
+          type: string
+          example: ali@gmail.com
+        phone_number:
+          type: string
+          example: "03001234567"
+        password:
+          type: string
+          example: password123
+        cnic:
+          type: string
+          example: "3520112345671"
+        person_type:
+          type: string
+          enum: [admin, merchant, user]
+          example: user
+        date_of_birth:
+          type: string
+          format: date
+          example: "1995-01-01"
+        gender:
+          type: string
+          enum: [Male, Female]
+          example: Male
+
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          example: ali.hassan@gmail.com
+        password:
+          type: string
+          example: password123
+
+    LoginResponse:
+      type: object
+      properties:
+        access:
+          type: string
+        refresh:
+          type: string
+        person_type:
+          type: string
+        name:
+          type: string
+        person_id:
+          type: integer
+
+    TransferRequest:
+      type: object
+      required: [receiver_wallet_account, amount]
+      properties:
+        receiver_wallet_account:
+          type: string
+          example: "1000000000000017"
+        amount:
+          type: number
+          example: 500
+
+    BillPaymentRequest:
+      type: object
+      required: [consumer_account_no, amount]
+      properties:
+        consumer_account_no:
+          type: string
+          example: "3000000000000001"
+        amount:
+          type: number
+          example: 1500
+
+    RechargeRequest:
+      type: object
+      required: [service_id, amount]
+      properties:
+        service_id:
+          type: integer
+          example: 1
+        amount:
+          type: number
+          example: 200
+
+    PromotionRequest:
+      type: object
+      required: [promotion_cost, duration, promotional_advertisement]
+      properties:
+        promotion_cost:
+          type: number
+          example: 5000
+        duration:
+          type: integer
+          example: 30
+        promotional_advertisement:
+          type: string
+          example: Get 20% off on all orders!
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+
+paths:
+
+  # ─── AUTH ───────────────────────────────────────────────
+  /register/:
+    post:
+      tags: [Auth]
+      summary: Register a new person
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201':
+          description: Registered successfully
+          content:
+            application/json:
+              example:
+                message: Registered successfully
+                person_id: 101
+                wallet_account: "3487000174127381"
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /login/:
+    post:
+      tags: [Auth]
+      summary: Login and get JWT token
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '401':
+          description: Invalid credentials
+
+  /logout/:
+    post:
+      tags: [Auth]
+      summary: Logout user
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Logged out successfully
+          content:
+            application/json:
+              example:
+                message: Logged out successfully
+        '401':
+          description: Unauthorized
+
+  # ─── PROFILE ────────────────────────────────────────────
+  /profile/:
+    get:
+      tags: [Profile]
+      summary: Get my profile
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Profile data
+          content:
+            application/json:
+              example:
+                person_id: 16
+                name: Ali Hassan
+                email: ali.hassan@gmail.com
+                phone_number: "03001234567"
+                cnic: "3520112345671"
+                person_type: user
+                date_of_birth: "1995-03-15"
+                gender: Male
+                wallet_account: "1000000000000016"
+                current_amount: 25000.00
+                rank: Silver
+                total_transactions: 16
+        '401':
+          description: Unauthorized
+
+  /profile/update/:
+    put:
+      tags: [Profile]
+      summary: Update my profile
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            example:
+              name: Ali Hassan Updated
+              phone_number: "03001234999"
+      responses:
+        '200':
+          description: Profile updated
+          content:
+            application/json:
+              example:
+                message: Profile updated successfully
+        '400':
+          description: Bad request
+
+  # ─── WALLET ─────────────────────────────────────────────
+  /wallet/:
+    get:
+      tags: [Wallet]
+      summary: Get my wallet — admin can pass person_id query param
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: person_id
+          in: query
+          required: false
+          schema:
+            type: integer
+          description: Admin only — view any wallet
+      responses:
+        '200':
+          description: Wallet data
+          content:
+            application/json:
+              example:
+                wallet_id: 16
+                wallet_account: "1000000000000016"
+                current_amount: 25000.00
+                name: Ali Hassan
+                email: ali.hassan@gmail.com
+                person_type: user
+        '404':
+          description: Wallet not found
+
+  /wallet/all/:
+    get:
+      tags: [Wallet]
+      summary: Get all wallets — admin only
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: All wallets
+          content:
+            application/json:
+              example:
+                wallets:
+                  - wallet_id: 1
+                    wallet_account: "1000000000000001"
+                    current_amount: 50000.00
+                    person_id: 1
+                    name: Admin Main
+                    email: admin.main@easypaisa.com
+                    person_type: admin
+        '403':
+          description: Forbidden
+
+  # ─── TRANSACTIONS ────────────────────────────────────────
+  /transfer/:
+    post:
+      tags: [Transactions]
+      summary: Send money — user and merchant only
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TransferRequest'
+      responses:
+        '201':
+          description: Transfer successful
+          content:
+            application/json:
+              example:
+                message: Transfer successful
+                transaction_id: 81
+                amount: 500
+                receiver_name: Sara Khan
+        '400':
+          description: Insufficient balance or rank limit exceeded
+          content:
+            application/json:
+              example:
+                error: Insufficient balance in sender wallet
+        '403':
+          description: Forbidden — admin cannot transfer
+
+  /transactions/:
+    get:
+      tags: [Transactions]
+      summary: Get all transactions — admin gets all, others get own
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Transaction list
+          content:
+            application/json:
+              example:
+                transactions:
+                  - transaction_id: 81
+                    amount_sent: 500.0
+                    amount_received: 500.0
+                    timestamp_sender: "2026-03-06T04:38:43"
+                    timestamp_receiver: "2026-03-06T04:38:43"
+                    sender_account: "1000000000000016"
+                    receiver_account: "1000000000000017"
+                    sender_name: Ali Hassan
+                    receiver_name: Sara Khan
+
+  /transactions/sent/:
+    get:
+      tags: [Transactions]
+      summary: Get sent transactions only
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Sent transactions list
+
+  /transactions/received/:
+    get:
+      tags: [Transactions]
+      summary: Get received transactions only
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Received transactions list
+
+  # ─── BILL PAYMENT ────────────────────────────────────────
+  /bill-payment/:
+    post:
+      tags: [Bill Payment]
+      summary: Pay a bill — user only
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BillPaymentRequest'
+      responses:
+        '201':
+          description: Bill payment successful
+          content:
+            application/json:
+              example:
+                message: Bill payment successful
+                bill_payment_id: 51
+                consumer_account: "3000000000000001"
+                amount: 1500
+        '400':
+          description: Insufficient balance
+          content:
+            application/json:
+              example:
+                error: Insufficient balance for bill payment
+        '403':
+          description: Forbidden — merchant and admin cannot pay bills
+
+  /bill-payment/history/:
+    get:
+      tags: [Bill Payment]
+      summary: Get bill payment history — user only
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Bill payment history
+          content:
+            application/json:
+              example:
+                bill_payments:
+                  - bill_payment_id: 51
+                    amount: 1500.0
+                    consumer_account: "3000000000000001"
+                    wallet_account: "1000000000000016"
+
+  # ─── MOBILE RECHARGE ─────────────────────────────────────
+  /recharge/services/:
+    get:
+      tags: [Mobile Recharge]
+      summary: Get all telecom services — user only
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: List of telecom services
+          content:
+            application/json:
+              example:
+                services:
+                  - service_id: 1
+                    service_name: Jazz
+                    company_account: "2000000000000001"
+                  - service_id: 2
+                    service_name: Telenor
+                    company_account: "2000000000000002"
+
+  /recharge/:
+    post:
+      tags: [Mobile Recharge]
+      summary: Do a mobile recharge — user only
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RechargeRequest'
+      responses:
+        '201':
+          description: Recharge successful
+          content:
+            application/json:
+              example:
+                message: Recharge successful
+                recharge_id: 81
+                service_name: Jazz
+                amount: 200
+        '400':
+          description: Insufficient balance
+          content:
+            application/json:
+              example:
+                error: Insufficient balance for recharge
+        '403':
+          description: Forbidden — merchant and admin cannot recharge
+
+  /recharge/history/:
+    get:
+      tags: [Mobile Recharge]
+      summary: Get recharge history — user only
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Recharge history
+          content:
+            application/json:
+              example:
+                recharges:
+                  - recharge_id: 81
+                    amount: 200.0
+                    timestamp: "2026-03-06T04:46:07"
+                    service_name: Jazz
+                    company_account: "2000000000000001"
+
+  # ─── DEBIT CARDS ─────────────────────────────────────────
+  /debit-card/register/:
+    post:
+      tags: [Debit Cards]
+      summary: Register a debit card — user only — no body required — system auto generates card details
+      security:
+        - BearerAuth: []
+      responses:
+        '201':
+          description: Debit card registered
+          content:
+            application/json:
+              example:
+                message: Debit card registered successfully
+                card_number: "4823910472938471"
+                cvv: "382"
+                registered_date: "2026-03-06"
+                expiry_date: "2031-03-06"
+        '400':
+          description: Insufficient balance for card fee or already has a card
+          content:
+            application/json:
+              examples:
+                insufficient_balance:
+                  value:
+                    error: Insufficient balance for debit card fee
+                already_exists:
+                  value:
+                    error: You already have a registered debit card
+        '403':
+          description: Forbidden — merchant and admin cannot register debit card
+
+  /debit-card/my-cards/:
+    get:
+      tags: [Debit Cards]
+      summary: Get my debit cards — user only
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: List of debit cards
+          content:
+            application/json:
+              example:
+                debit_cards:
+                  - card_number: "4823910472938471"
+                    cvv: "382"
+                    registered_date: "2026-03-06"
+                    expiry_date: "2031-03-06"
+                    card_fee: 500.0
+
+  # ─── NOTIFICATIONS ───────────────────────────────────────
+  /notifications/:
+    get:
+      tags: [Notifications]
+      summary: Get my notifications — all roles
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: List of notifications
+          content:
+            application/json:
+              example:
+                notifications:
+                  - notification_id: 161
+                    timestamp: "2026-03-06T04:38:43"
+                    transaction_id: 81
+                    amount_sent: 500.0
+                    amount_received: 500.0
+                    sender_name: Ali Hassan
+                    receiver_name: Sara Khan
+                    sender_account: "1000000000000016"
+                    receiver_account: "1000000000000017"
+
+  # ─── RANK ────────────────────────────────────────────────
+  /rank/:
+    get:
+      tags: [Rank]
+      summary: Get my rank — user only
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Rank details
+          content:
+            application/json:
+              example:
+                rank_name: Silver
+                min_transaction: 11
+                max_transaction: 25
+                min_amount: 0.00
+                max_amount: 15000.00
+                total_transactions: 16
+        '403':
+          description: Forbidden — merchant and admin have no rank
+
+  # ─── PROMOTIONS ──────────────────────────────────────────
+  /promotions/:
+    get:
+      tags: [Promotions]
+      summary: Get all active promotions — all roles
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: List of active promotions
+          content:
+            application/json:
+              example:
+                promotions:
+                  - promotion_id: 14
+                    merchant_name: Limelight Fashion
+                    promotion_cost: 8000.0
+                    duration: 30
+                    promotional_advertisement: Flat 25% off on all summer collection!
+
+  /merchant/promotion/create/:
+    post:
+      tags: [Promotions]
+      summary: Create a promotion — merchant only
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PromotionRequest'
+      responses:
+        '201':
+          description: Promotion created
+          content:
+            application/json:
+              example:
+                message: Promotion created successfully
+                promotion_id: 15
+        '400':
+          description: Insufficient balance
+          content:
+            application/json:
+              example:
+                error: Insufficient balance for promotion cost
+        '403':
+          description: Forbidden — user and admin cannot create promotions
+
+  # ─── ADMIN ───────────────────────────────────────────────
+  /admin/users/:
+    get:
+      tags: [Admin]
+      summary: Get all users — admin only
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: List of all persons with wallet balances
+        '403':
+          description: Forbidden
+
+  /admin/users/{person_id}/:
+    get:
+      tags: [Admin]
+      summary: Get single user — admin only
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: person_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: User details with wallet balance
+        '404':
+          description: User not found
+
+  /admin/revenue/:
+    get:
+      tags: [Admin]
+      summary: Get revenue report — admin only
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Revenue by month and year
+          content:
+            application/json:
+              example:
+                revenues:
+                  - revenue_id: 1
+                    month: 1
+                    year: 2025
+                    amount: 5000.0
+                    admin_name: Admin Main
+
+  /admin/merchants/:
+    get:
+      tags: [Admin]
+      summary: Get all merchants — admin only
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: List of all merchants with wallet balances
+        '403':
+          description: Forbidden
+
+  /admin/bill-payments/:
+    get:
+      tags: [Admin]
+      summary: Get all bill payments — admin only
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: All bill payments in system
+        '403':
+          description: Forbidden
+
+  /admin/recharges/:
+    get:
+      tags: [Admin]
+      summary: Get all recharges — admin only
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: All recharges in system
+        '403':
+          description: Forbidden
+
+  /admin/wallets/:
+    get:
+      tags: [Admin]
+      summary: Get all wallets with balances — admin only
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: All wallets in system
+        '403':
+          description: Forbidden

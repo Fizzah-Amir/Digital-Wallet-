@@ -13,7 +13,6 @@ ALTER TABLE promotion        DISABLE TRIGGER ALL;
 INSERT INTO person (email, name, phone_number, password, cnic, person_type) VALUES
 
 ('admin.main@easypaisa.com',      'Admin Main',           '03001111111', 'adminpass123',  '3520199999991', 'admin'),
-
 ('merchant.foodpanda@fp.com',     'FoodPanda PK',         '03002222221', 'merchantpass1', '3520188888881', 'merchant'),
 ('merchant.daraz@drz.com',        'Daraz Pakistan',       '03002222222', 'merchantpass2', '3520188888882', 'merchant'),
 ('merchant.kfc@kfc.com',          'KFC Pakistan',         '03002222223', 'merchantpass3', '3520188888883', 'merchant'),
@@ -113,13 +112,7 @@ INSERT INTO person (email, name, phone_number, password, cnic, person_type) VALU
 ('hareem.farooq@gmail.com',       'Hareem Farooq',        '03011234575', 'password123',   '3520112345752', 'user'),
 ('atif.aslam@gmail.com',          'Atif Aslam',           '03021234575', 'password123',   '3520112345753', 'user'),
 ('maryam.nafees@gmail.com',       'Maryam Nafees',        '03031234575', 'password123',   '3520112345754', 'user'),
-('rahat.ali@gmail.com',           'Rahat Ali',            '03041234575', 'password123',   '3520112345755', 'user'),
-('zara.sheikh@gmail.com',         'Zara Sheikh',          '03051234575', 'password123',   '3520112345756', 'user'),
-('qurat.ul.ain@gmail.com',        'Qurat ul Ain',         '03061234575', 'password123',   '3520112345757', 'user'),
-('danish.taimoor@gmail.com',      'Danish Taimoor',       '03071234575', 'password123',   '3520112345758', 'user'),
-('neelam.muneer@gmail.com',       'Neelam Muneer',        '03081234575', 'password123',   '3520112345759', 'user'),
-('zaheer.abbas@gmail.com',        'Zaheer Abbas',         '03091234575', 'password123',   '3520112345760', 'user');
-
+('rahat.ali@gmail.com',           'Rahat Ali',            '03041234575', 'password123',   '3520112345755', 'user');
 
 INSERT INTO admin (admin_person_id) VALUES (1);
 
